@@ -1,0 +1,115 @@
+version: '3.8' # Versi Docker Compose yang digunakan
+name: "multi_service_infrastructure" # Nama proyek Compose, digunakan untuk menamai container dan network
+
+services:
+  nginx: # Service untuk NGINX sebagai web server
+    image: nginx:latest # Menggunakan image resmi NGINX versi terbaru
+    container_name: nginx_server # Nama container yang ditetapkan
+    ports:
+      - "8080:80" # Mengekspos port 80 di container ke port 8080 di host
+    volumes:
+      - ./nginx/html:/usr/share/nginx/html # Mount folder html lokal ke dalam container
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf # Mount file default.conf untuk konfigurasi nginx
+    networks:
+      - webnet # Jaringan tempat service ini beroperasi
+    configs:
+      - source: nginx_config # Config untuk konfigurasi NGINX (misalnya, default.conf)
+        target: /etc/nginx/conf.d/default.conf # Tempat file config akan dimasukkan di container
+
+  mysql: # Service untuk MySQL sebagai database server
+    image: mysql:latest # Menggunakan image resmi MySQL versi terbaru
+    container_name: mysql_db # Nama container yang ditetapkan
+    environment: # Variabel lingkungan untuk konfigurasi database
+      MYSQL_ROOT_PASSWORD: rootpwd # Password untuk root MySQL
+      MYSQL_DATABASE: sample_db # Nama database default
+      MYSQL_USER: user # Nama user MySQL
+      MYSQL_PASSWORD: user123 # Password user MySQL
+    ports:
+      - "3306:3306" # Mengekspos port 3306 di container ke port 3306 di host
+    volumes:
+      - mysql_data:/var/lib/mysql # Volume untuk menyimpan data MySQL
+    networks:
+      - dbnet # Jaringan tempat service ini beroperasi
+
+  adminer: # Service untuk Adminer sebagai GUI database
+    image: adminer:latest # Menggunakan image resmi Adminer versi terbaru
+    container_name: adminer_ui # Nama container yang ditetapkan
+    ports:
+      - "8081:8080" # Mengekspos port 8080 di container ke port 8081 di host
+    networks:
+      - dbnet # Jaringan tempat service ini beroperasi
+
+  redis: # Service untuk Redis sebagai message queue
+    image: redis:latest # Menggunakan image resmi Redis versi terbaru
+    container_name: redis_server # Nama container yang ditetapkan
+    ports:
+      - "6379:6379" # Mengekspos port 6379 di container ke port 6379 di host
+    networks:
+      - mqnet # Jaringan tempat service ini beroperasi
+
+  rabbitmq: # Service untuk RabbitMQ sebagai message broker
+    image: rabbitmq:3-management # Menggunakan image RabbitMQ dengan GUI management
+    container_name: rabbitmq_server # Nama container yang ditetapkan
+    ports:
+      - "5672:5672" # Mengekspos port 5672 untuk komunikasi pesan
+      - "15672:15672" # Mengekspos port 15672 untuk GUI management
+    environment:
+      RABBITMQ_DEFAULT_USER: rabbituser # Username default RabbitMQ
+      RABBITMQ_DEFAULT_PASS: rabbitpwd # Password default RabbitMQ
+    networks:
+      - mqnet # Jaringan tempat service ini beroperasi
+
+  prometheus: # Service untuk Prometheus sebagai monitoring system
+    image: prom/prometheus:latest # Menggunakan image resmi Prometheus versi terbaru
+    container_name: prometheus # Nama container yang ditetapkan
+    ports:
+      - "9090:9090" # Mengekspos port 9090 di container ke port 9090 di host
+    volumes:
+      - prometheus_data:/etc/prometheus # Volume untuk konfigurasi Prometheus
+    networks:
+      - monitornet # Jaringan tempat service ini beroperasi
+
+  grafana: # Service untuk Grafana sebagai dashboard visualisasi
+    image: grafana/grafana:latest # Menggunakan image resmi Grafana versi terbaru
+    container_name: grafana_dashboard # Nama container yang ditetapkan
+    ports:
+      - "3000:3000" # Mengekspos port 3000 di container ke port 3000 di host
+    environment:
+      - GF_SECURITY_ADMIN_USER=user # Username admin untuk Grafana
+      - GF_SECURITY_ADMIN_PASSWORD=user123 # Password admin untuk Grafana
+    networks:
+      - monitornet # Jaringan tempat service ini beroperasi
+
+  worker: # Service untuk worker berbasis Python
+    image: python:3.11-slim # Menggunakan image Python versi 3.11 slim
+    container_name: background_worker # Nama container yang ditetapkan
+    ports:
+      - "8000:8000"
+    command: python  /app/worker.py # Menjalankan worker.py
+    volumes:
+      - .:/app # Memastikan file di direktori kerja host dapat diakses di dalam container
+    networks:
+      - webnet # Jaringan tempat service ini beroperasi
+
+networks:
+  webnet: # Jaringan untuk layanan web
+    driver: bridge
+  dbnet: # Jaringan untuk layanan database
+    driver: bridge
+  mqnet: # Jaringan untuk layanan message queue
+    driver: bridge
+  monitornet: # Jaringan untuk layanan monitoring
+    driver: bridge
+
+volumes:
+  web_content: # Volume untuk menyimpan konten web NGINX
+    driver: local
+  mysql_data: # Volume untuk menyimpan data MySQL
+    driver: local
+  prometheus_data: # Volume untuk menyimpan konfigurasi Prometheus
+    driver: local
+
+configs:
+  nginx_config: # Config untuk NGINX
+    file: ./nginx/default.conf # File konfigurasi NGINX yang ada di direktori host
+
